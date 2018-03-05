@@ -235,12 +235,3 @@ class TCP_Reassembly(Reassembly):
                     ))
                     datagram.append(packet)
         return tuple(datagram)
-
-    def fetch(self):
-        # submit all buffers in strict mode
-        if self._strflg:
-            tmp_dtgram = copy.deepcopy(self._dtgram)
-            for buffer in self._buffer.values():
-                tmp_dtgram += self.submit(buffer)
-            return tmp_dtgram
-        return self._dtgram

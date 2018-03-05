@@ -3,6 +3,7 @@
 
 
 import collections
+import textwrap
 
 
 # Address Resolution Protocol
@@ -39,10 +40,36 @@ class ARP(Link):
      - Dynamic Reverse Address Resolution Protocol (DRARP) [RFC 1931]
      - Inverse Address Resolution Protocol (IARP) [RFC 2390]
 
+     Properties:
+         * name -- str, name of corresponding procotol
+         * info -- Info, info dict of current instance
+         * layer -- str, `Link`
+         * length -- int, header length of corresponding protocol
+         * protocol -- str, name of next layer protocol
+         * protochain -- ProtoChain, protocol chain of current instance
+         * src -- tuple(str, str), sender hardware & protocol address
+         * dst -- tuple(str, str), target hardware & protocol address
+         * type -- tuple(str, str), hardware & protocol type
+
+    Methods:
+        * read_arp -- read Address Resolution Protocol
+
+     Attributes:
+         * _file -- BytesIO, bytes to be extracted
+         * _info -- Info, info dict of current instance
+         * _protos -- ProtoChain, protocol chain of current instance
+
+     Utilities:
+         * _read_protos -- read next layer protocol type
+         * _read_fileng -- read file buffer
+         * _read_unpack -- read bytes and unpack to integers
+         * _read_binary -- read bytes and convert into binaries
+         * _decode_next_layer -- decode next layer protocol type
+         * _import_next_layer -- import next layer protocol extractor
+         * _read_addr_resolve -- resolve MAC address according to protocol
+         * _read_proto_resolve -- solve IP address according to protocol
+
     """
-
-    __all__ = ['name', 'info', 'length', 'src', 'dst', 'layer', 'protocol', 'protochain']
-
     ##########################################################################
     # Properties.
     ##########################################################################
@@ -50,10 +77,6 @@ class ARP(Link):
     @property
     def name(self):
         return self._name
-
-    @property
-    def info(self):
-        return self._info
 
     @property
     def length(self):
@@ -68,29 +91,11 @@ class ARP(Link):
         return (self._info.tha, self._info.tpa)
 
     @property
-    def layer(self):
-        return self.__layer__
-
-    @property
-    def protocol(self):
+    def type(self):
         return (self._info.htype, self._info.ptype)
 
     ##########################################################################
-    # Data models.
-    ##########################################################################
-
-    def __init__(self, _file, length=None):
-        self._file = _file
-        self._info = Info(self.read_arp(length))
-
-    def __len__(self):
-        return self._info.len
-
-    def __length_hint__(self):
-        return 28
-
-    ##########################################################################
-    # Utilities.
+    # Methods.
     ##########################################################################
 
     def read_arp(self, length):
@@ -116,7 +121,7 @@ class ARP(Link):
         _shwa = self._read_addr_resolve(_hlen, _hwty)
         _spta = self._read_proto_resolve(_plen, _ptty)
         _thwa = self._read_addr_resolve(_hlen, _hwty)
-        _hpta = self._read_proto_resolve(_plen, _ptty)
+        _tpta = self._read_proto_resolve(_plen, _ptty)
 
         if _oper in (5, 6, 7):
             self._name = 'Dynamic Reverse Address Resolution Protocol'
@@ -138,12 +143,37 @@ class ARP(Link):
             len = 8 + _hlen * 2 + _plen * 2,
         )
 
-        proto = arp['ptype']
+        proto = None
         if length is not None:
             length -= arp['len']
-        return self._read_next_layer(arp, proto, length)
+        return self._decode_next_layer(arp, proto, length)
+
+    ##########################################################################
+    # Data models.
+    ##########################################################################
+
+    def __init__(self, _file, length=None):
+        self._file = _file
+        self._info = Info(self.read_arp(length))
+
+    def __len__(self):
+        return self._info.len
+
+    def __length_hint__(self):
+        return 28
+
+    ##########################################################################
+    # Utilities.
+    ##########################################################################
 
     def _read_addr_resolve(self, length, htype):
+        """Resolve MAC address according to protocol.
+
+        Keyword arguments:
+            * length -- int, hardware address length
+            * htype -- int, hardware type
+
+        """
         if htype == 1:  # Ethernet
             _byte = self._read_fileng(6)
             _addr = '-'.join(textwrap.wrap(_byte.hex(), 2))
@@ -152,6 +182,13 @@ class ARP(Link):
         return _addr
 
     def _read_proto_resolve(self, length, ptype):
+        """Resolve IP address according to protocol.
+
+        Keyword arguments:
+            * length -- int, protocol address length
+            * hptype -- int, protocol type
+
+        """
         if ptype == '0800':     # IPv4
             _byte = self._read_fileng(4)
             _addr = '.'.join([str(_) for _ in _byte])

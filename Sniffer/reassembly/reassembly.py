@@ -11,6 +11,7 @@ import copy
 
 
 from .utilities import Info
+from .validations import bool_check, dict_check, int_check
 
 
 ABCMeta = abc.ABCMeta
@@ -36,6 +37,8 @@ class Reassembly(object):
      - reassembly : perform the reassembly procedure
      - submit : submit reassembled payload
      - fetch : fetch datagram
+     - index : return datagram index
+     - run : run automatically
 
     """
     __metaclass__ = ABCMeta
@@ -74,16 +77,29 @@ class Reassembly(object):
         pass
 
     # fetch datagram
-    @abstractmethod
     def fetch(self):
-        pass
+        # submit all buffers in strict mode
+        if self._strflg:
+            tmp_dtgram = copy.deepcopy(self._dtgram)
+            for buffer in self._buffer.values():
+                tmp_dtgram += self.submit(buffer)
+            return tmp_dtgram
+        return self._dtgram
 
-    # make index
-    def make(self):
-        index = list()
-        datagrams = self.fetch()
-        for counter, datagram in datagrams:
-            index.append()
+    # return datagram index
+    def index(self, pkt_num):
+        int_check(pkt_num)
+        for counter, datagram in enumerate(self.datagram):
+            if pkt_num in datagram.index:
+                return counter
+        return None
+
+    # run automatically
+    def run(self, packets):
+        for packet in packets:
+            dict_check(packet)
+            info = Info(packet)
+            self.reassembly(info)
 
     ##########################################################################
     # Data models.
@@ -92,21 +108,13 @@ class Reassembly(object):
     # Not hashable
     __hash__ = None
 
-    def __new__(cls, *, strict=False):
-        self = super().__new__(cls)
-        return self
-
     def __init__(self, *, strict=False):
+        bool_check(strict)
         self._strflg = strict   # stirct mode flag
         self._buffer = dict()   # buffer field
         self._dtgram = tuple()  # reassembled datagram
 
     def __call__(self, packet_dict):
+        dict_check(packet_dict)
         info = Info(packet_dict)
         self.reassembly(info)
-
-    def index(self, pkt_num):
-        for counter, datagram in enumerate(self.datagram):
-            if pkt_num in datagram.index:
-                return counter
-        return None
